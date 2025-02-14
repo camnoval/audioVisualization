@@ -3,3 +3,4 @@ librosa
 numpy<=2.1
 moviepy
 matplotlib
+pytube

@@ -88,7 +88,7 @@ def frequency_to_color(f, f_min=20, f_max=20000):
     x_max = math.log10(f_max)
     
     # Map log-frequency linearly to the range [4, 7]
-    mapped_value = 4.0 + ((x - x_min) / (x_max - x_min)) * 3.0
+    mapped_value = 4.00 + ((x - x_min) / (x_max - x_min)) * 3.00
     
     # Convert mapped value to wavelength (4 -> 400 nm, 7 -> 700 nm)
     wavelength = mapped_value * 100
@@ -143,23 +143,55 @@ def create_gradient_image(colors, height=100):
         img[:, i, :] = color  # Set the entire column to the color
     return img
 
-# Example usage:
+from yt_dlp import YoutubeDL
+
+def download_youtube_audio_and_metadata(url, output_filename='audio.wav'):
+    """
+    Downloads audio from a YouTube video URL and extracts the metadata (title and artist).
+    """
+    options = {
+        'format': 'bestaudio/best',
+        'outtmpl': 'temp_audio.%(ext)s',
+        'quiet': True,  # Suppress yt-dlp output
+    }
+    with YoutubeDL(options) as ydl:
+        info = ydl.extract_info(url, download=True)
+    
+    # Extract title and artist (if available)
+    title = info.get('title', 'Unknown Title')
+    artist = info.get('artist', 'Unknown Artist')
+
+    # Convert downloaded file to WAV
+    temp_filename = f"temp_audio.{info['ext']}"
+    audio_clip = AudioFileClip(temp_filename)
+    audio_clip.write_audiofile(output_filename, codec='pcm_s16le')
+    audio_clip.close()
+    
+    # Remove the temporary file
+    os.remove(temp_filename)
+    os.remove("downloaded_audio.wav")
+    
+    return output_filename, title, artist
+
+# Update the main block to use the title and artist
 if __name__ == "__main__":
     # URL of the YouTube video
-    youtube_url = "https://www.youtube.com/watch?v=ZZNZgtj26Fk"
+    youtube_url = "https://www.youtube.com/watch?v=ABlYBn7Jo38&pp=ygUgZGFyayBzaWRlIG9mIHRoZSBtb29uIHBpbmsgZmxveWQ%3D"
     
-    # Download and extract audio from the YouTube video to a WAV file.
-    audio_file = download_youtube_audio(youtube_url, output_filename='downloaded_audio.wav')
+    # Download and extract audio and metadata
+    audio_file, song_title, song_artist = download_youtube_audio_and_metadata(youtube_url)
     
-    # Process the audio file to get a list of colors for each 0.1-second segment.
-    colors = process_audio(audio_file, segment_duration=0.1)
+    # Process the audio file to get a list of colors for each 0.05-second segment.
+    colors = process_audio(audio_file, segment_duration=0.05)
     
     # Create a gradient image from the list of colors.
-    gradient_img = create_gradient_image(colors, height=100)
+    gradient_img = create_gradient_image(colors, height=1000)
     
-    # Display the gradient image.
+    # Display the gradient image with a dynamic title
     plt.figure(figsize=(10, 2))
     plt.imshow(gradient_img)
     plt.axis('off')
-    plt.title("Gradient of Dominant Frequencies from YouTube Video")
+    plt.title(f"Dark Side of the Moon - Pink Floyd")
+    #plt.title(f"'{song_title} - {song_artist}'", fontsize=14)
     plt.show()
+
