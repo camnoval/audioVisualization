@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Audio files
+*.mp3
+*.wav
+*.m4a
+*.flac
+
+# Generated images
+*.png
+*.jpg
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Streamlit
+.streamlit/
+
+# IDE files
+.vscode/
+.idea/
+
+# Temp files
+*/temp_*
+temp_*
+temp/
+
+# OS specific
+.DS_Store
+Thumbs.db
