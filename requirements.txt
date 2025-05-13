@@ -6,4 +6,4 @@ moviepy>=1.0.3
 yt-dlp>=2024.04.08
 streamlit>=1.22.0
 ffmpeg-python>=0.2.0
-ffmpeg>=4.4
+ffmpeg>=1.4
