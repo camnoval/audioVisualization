@@ -2,6 +2,9 @@ import os
 import re
 import subprocess
 from yt_dlp import YoutubeDL
+import numpy as np
+import io
+import wave
 
 # Try different import methods for moviepy
 try:
@@ -11,7 +14,7 @@ try:
 except ImportError:
     try:
         # Try the more common import path
-        from moviepy.editor import AudioFileClip
+        from moviepy.editor import AudioFileClip # type: ignore
         print("Using moviepy.editor AudioFileClip import")
     except ImportError:
         # Fallback to a manual approach if moviepy is having issues
@@ -181,3 +184,49 @@ def extract_tracks_from_playlist(playlist_info):
                 })
 
     return tracks
+
+
+def get_stream_url(youtube_url):
+    """Get direct audio stream URL from a YouTube video"""
+    ydl_opts = {
+        'quiet': True,
+        'skip_download': True,
+        'format': 'bestaudio',
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    }
+    with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(youtube_url, download=False)
+        return info['url']
+
+def extract_dominant_frequencies_from_stream(stream_url, segment_duration=0.1, sample_rate=44100):
+    """Stream audio from YouTube and return dominant frequency per time segment"""
+    import subprocess
+
+    ffmpeg_cmd = [
+        'ffmpeg', '-i', stream_url,
+        '-f', 'wav', '-acodec', 'pcm_s16le',
+        '-ar', str(sample_rate), '-ac', '1',
+        'pipe:1'
+    ]
+
+    proc = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    raw_audio = io.BytesIO(proc.stdout.read())
+
+    raw_audio.seek(0)
+    with wave.open(raw_audio, 'rb') as wav_file:
+        n_frames = wav_file.getnframes()
+        audio_data = np.frombuffer(wav_file.readframes(n_frames), dtype=np.int16)
+
+    segment_samples = int(segment_duration * sample_rate)
+    frequencies = []
+
+    for i in range(0, len(audio_data), segment_samples):
+        segment = audio_data[i:i + segment_samples]
+        if len(segment) == 0:
+            continue
+        freqs = np.fft.rfft(segment)
+        mags = np.abs(freqs)
+        dominant_freq = np.argmax(mags) * sample_rate / segment_samples
+        frequencies.append(dominant_freq)
+
+    return frequencies
