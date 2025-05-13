@@ -5,6 +5,10 @@ from yt_dlp import YoutubeDL
 import numpy as np
 import io
 import wave
+from audio_processing import extract_dominant_frequencies_from_stream, map_frequencies_to_colors
+from visualization import create_gradient_image
+from PIL import Image
+
 
 # Try different import methods for moviepy
 try:
@@ -113,10 +117,16 @@ def split_album_video(video_info, output_folder):
     if 'chapters' in full_info and full_info['chapters']:
         print(f"Found {len(full_info['chapters'])} chapters/tracks in the video")
 
-        audio_file, _, _ = download_youtube_audio_and_metadata(
-            f"https://www.youtube.com/watch?v={video_info['id']}",
-            output_filename=os.path.join(output_folder, 'full_album.wav')
-        )
+        stream_url = get_stream_url(f"https://www.youtube.com/watch?v={video_info['id']}")
+        dominant_freqs = extract_dominant_frequencies_from_stream(stream_url)
+
+        # Save frequency-based color gradient for future visualization
+        colors = map_frequencies_to_colors(dominant_freqs)
+
+        # Optionally store as raw image for debugging
+        gradient_image = create_gradient_image(colors, height=100)
+        Image.fromarray(gradient_image).save(os.path.join(output_folder, "full_album_gradient.png"))
+
 
         try:
             result = subprocess.run(
