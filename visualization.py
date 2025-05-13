@@ -51,7 +51,7 @@ def get_dominant_color(images):
     if color_counter:
         return color_counter.most_common(1)[0][0]
     
-    return (100, 100, 150)  # Default fallback
+    return (0, 0, 0)  # Default fallback
 
 def create_track_visualization(gradient_image, title, output_path):
     """Create visualization for a single track"""

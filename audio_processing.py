@@ -42,11 +42,7 @@ def process_audio(file_path, segment_duration=0.05):
 
     except Exception as e:
         print(f"Audio processing error: {e}")
-        print("Using fallback color pattern")
-        return [(int(127 + 127*np.sin(i/20)),
-                 int(127 + 127*np.sin((i+100)/20)),
-                 int(127 + 127*np.sin((i+200)/20)))
-                for i in range(1000)]
+
 
 def map_frequencies_to_colors(frequencies):
     """
