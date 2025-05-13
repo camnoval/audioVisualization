@@ -131,7 +131,7 @@ def get_stream_url(youtube_url):
 def extract_dominant_frequencies_from_stream(stream_url, segment_duration=0.1, sample_rate=44100):
     """
     Stream audio from YouTube and return dominant frequency per time segment.
-    Fails cleanly if stream is invalid, truncated, or inaccessible.
+    Handles FFmpeg stream errors and decoding failures explicitly.
     """
     print(f"🔗 Stream URL: {stream_url}")
 
@@ -170,7 +170,7 @@ def extract_dominant_frequencies_from_stream(stream_url, segment_duration=0.1, s
         segment = audio_data[i:i + segment_samples]
         if len(segment) == 0:
             continue
-        segment = segment * np.hanning(len(segment))  # smooth edges
+        segment = segment * np.hanning(len(segment))
         freqs = np.fft.rfft(segment)
         mags = np.abs(freqs)
         dominant_freq = np.argmax(mags) * sample_rate / segment_samples
