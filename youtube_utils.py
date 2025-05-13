@@ -129,7 +129,12 @@ def get_stream_url(youtube_url):
         return info['url']
 
 def extract_dominant_frequencies_from_stream(stream_url, segment_duration=0.1, sample_rate=44100):
-    """Stream audio from YouTube and return dominant frequency per time segment"""
+    """
+    Stream audio from YouTube and return dominant frequency per time segment.
+    Fails cleanly if stream is invalid, truncated, or inaccessible.
+    """
+    print(f"🔗 Stream URL: {stream_url}")
+
     ffmpeg_cmd = [
         'ffmpeg', '-i', stream_url,
         '-f', 'wav', '-acodec', 'pcm_s16le',
@@ -137,13 +142,26 @@ def extract_dominant_frequencies_from_stream(stream_url, segment_duration=0.1, s
         'pipe:1'
     ]
 
-    proc = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    raw_audio = io.BytesIO(proc.stdout.read())
+    try:
+        proc = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        audio_bytes = proc.stdout.read()
+    except Exception as e:
+        print(f"❌ Failed to run FFmpeg: {e}")
+        return []
 
-    raw_audio.seek(0)
-    with wave.open(raw_audio, 'rb') as wav_file:
-        n_frames = wav_file.getnframes()
-        audio_data = np.frombuffer(wav_file.readframes(n_frames), dtype=np.int16)
+    if not audio_bytes or len(audio_bytes) < 1000:
+        print("❌ FFmpeg failed to extract any audio data from stream.")
+        return []
+
+    raw_audio = io.BytesIO(audio_bytes)
+
+    try:
+        with wave.open(raw_audio, 'rb') as wav_file:
+            n_frames = wav_file.getnframes()
+            audio_data = np.frombuffer(wav_file.readframes(n_frames), dtype=np.int16)
+    except Exception as e:
+        print(f"❌ Error reading audio stream as WAV: {e}")
+        return []
 
     segment_samples = int(segment_duration * sample_rate)
     frequencies = []
