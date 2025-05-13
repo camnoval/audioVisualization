@@ -112,7 +112,7 @@ def create_track_visualization(gradient_image, title, output_path):
     return output_path
 
 def stack_images_with_margin(image_files, margin=10, border=30, bg_color=None, album_title=None):
-    """Stack multiple images with margin between them and border around"""
+    """Stack multiple images with margin between them and border around with adaptive title sizing"""
     if not image_files:
         return None
     
@@ -139,8 +139,26 @@ def stack_images_with_margin(image_files, margin=10, border=30, bg_color=None, a
     width = max(img.width for img in images)
     total_height = sum(img.height for img in images) + margin * (len(images) - 1)
     
-    # Add extra height for title - significantly increased
-    title_height = 100 if album_title else 0  # Taller space for title
+    # Calculate ideal title height based on image dimensions
+    # For wider images, we can use a larger title area
+    # Assume that title height should be proportional to the width but with min/max limits
+    min_title_height = 60  # Minimum title space
+    max_title_height = 150  # Maximum title space
+    
+    # Base the title height on total image dimensions
+    # Use square root of total area as a reference to avoid extreme ratios
+    image_area = width * total_height
+    sqrt_area = (image_area ** 0.5)
+    
+    if album_title:
+        # Longer titles need more space
+        title_length_factor = min(1.5, max(0.8, len(album_title) / 30))
+        title_height = int(min(max_title_height, 
+                               max(min_title_height, sqrt_area * 0.1 * title_length_factor)))
+    else:
+        title_height = 0
+    
+    print(f"Using title height: {title_height}px for width: {width}px")
     
     # Create new image with margin for border
     combined = Image.new('RGB', 
@@ -148,18 +166,28 @@ def stack_images_with_margin(image_files, margin=10, border=30, bg_color=None, a
                         color=bg_color)
     
     # Add album title if provided
-    if album_title:
+    if album_title and title_height > 0:
         try:
             # First try to get Forte path from matplotlib
             forte_path = get_font_path_from_matplotlib('Forte')
             
+            # Calculate font size based on available space and title length
+            # Shorter titles can be larger, longer titles smaller
+            font_size_factor = min(1.0, max(0.5, 40 / max(10, len(album_title))))
+            font_size = int(title_height * 0.7 * font_size_factor)
+            
+            # Make sure font is not too small or too large
+            font_size = max(30, min(font_size, 90))
+            
+            print(f"Using font size: {font_size}px for title")
+            
             if forte_path:
-                font = ImageFont.truetype(forte_path, 72)
+                font = ImageFont.truetype(forte_path, font_size)
                 print(f"Using Forte font at: {forte_path}")
             else:
                 # Fall back to other options
                 try:
-                    font = ImageFont.truetype("Arial Bold", 70)
+                    font = ImageFont.truetype("Arial Bold", font_size)
                     print("Using Arial Bold font")
                 except:
                     print("Using default font")
@@ -177,12 +205,23 @@ def stack_images_with_margin(image_files, margin=10, border=30, bg_color=None, a
                 display_title = album_title.split(" {")[0]
             else:
                 display_title = album_title
+                
+            # For very long titles, truncate or add an ellipsis
+            max_display_length = 60
+            if len(display_title) > max_display_length:
+                display_title = display_title[:max_display_length-3] + "..."
             
             # Get opposite color for outline
             outline_color = (0, 0, 0) if text_color == (255, 255, 255) else (255, 255, 255)
             
+            # Scale outline size based on font size
+            outline_size = max(2, int(font_size * 0.05))
+            
             # Draw text outline/shadow for better visibility
-            for offset in [(3,3), (-3,-3), (3,-3), (-3,3)]:  # Larger offsets for bigger font
+            for offset in [(outline_size, outline_size), 
+                          (-outline_size, -outline_size), 
+                          (outline_size, -outline_size), 
+                          (-outline_size, outline_size)]:
                 draw.text((title_position + offset[0], title_height//2), 
                         display_title, fill=outline_color, font=font, anchor="mm")  # Center vertically too
             
@@ -190,7 +229,7 @@ def stack_images_with_margin(image_files, margin=10, border=30, bg_color=None, a
             draw.text((title_position, title_height//2), display_title, 
                     fill=text_color, font=font, anchor="mm")  # Centered in title area
             
-            print(f"Added title: {display_title}")
+            print(f"Added title: {display_title} with font size {font_size}")
             
         except Exception as e:
             print(f"Title rendering error: {e}")
