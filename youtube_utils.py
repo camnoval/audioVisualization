@@ -221,3 +221,23 @@ def extract_tracks_from_playlist(playlist_info):
                 })
     
     return tracks
+
+def load_youtube_url(link):
+    """Load metadata and chapters or playlist entries from a direct YouTube link"""
+    try:
+        with YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
+            info = ydl.extract_info(link, download=False)
+
+            if 'entries' in info and len(info['entries']) > 1:
+                print(f"✅ Loaded playlist: {info.get('title')} ({len(info['entries'])} tracks)")
+                return info
+            elif 'chapters' in info and len(info['chapters']) > 1:
+                print(f"✅ Loaded chaptered video: {info.get('title')}")
+                return info
+            else:
+                print("❌ Link must be a playlist or a video with chapters.")
+                return None
+    except Exception as e:
+        print(f"Error loading YouTube URL: {e}")
+        return None
+

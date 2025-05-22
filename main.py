@@ -10,13 +10,21 @@ import requests
 from io import BytesIO
 
 def main():
-    # Get user input for album/song
-    query = input("Enter album or song name: ")
+   # Get user input for album/song
 
+    user_input = input("Enter YouTube URL or album/song name: ").strip()
+
+
+ 
     # Search for the album
-    print(f"Searching for '{query}'...")
+    print(f"Searching for '{user_input}'...")
     try:
-        result = youtube_utils.search_youtube_playlist(query)
+        if "youtube.com" in user_input or "youtu.be" in user_input:
+            print(f"Loading YouTube link: {user_input}")
+            result = youtube_utils.load_youtube_url(user_input)
+        else:
+            print(f"Searching for '{user_input}'...")
+            result = youtube_utils.search_youtube_playlist(user_input)
     except Exception as e:
         print(f"❌ Error during YouTube search: {e}")
         sys.exit(1)
@@ -26,7 +34,7 @@ def main():
         sys.exit(1)
 
     # Create output folder based on sanitized album title
-    album_title = result.get('title', query)
+    album_title = result.get('title', user_input)
     output_folder = os.path.join(os.getcwd(), sanitize_filename(album_title))
     os.makedirs(output_folder, exist_ok=True)
     print(f"Saving to folder: {output_folder}")
