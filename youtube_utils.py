@@ -61,51 +61,71 @@ def download_youtube_audio_and_metadata(url, output_filename='audio.wav'):
     return output_filename, title, artist
 
 def search_youtube_playlist(query):
-    """Search for a YouTube playlist using yt-dlp instead of pytube"""
-    search_query = f"{query} full album playlist"
-    
-    # Search options
+    """Search for a playlist or chaptered album video, let the user pick one."""
+    search_query = f"{query} full album"
+
     options = {
         'quiet': True,
         'extract_flat': True,
         'skip_download': True,
         'no_warnings': True,
-        'max_results': 5  # Limit results to avoid excessive API calls
+        'max_results': 8,
     }
-    
-    with YoutubeDL(options) as ydl:
-        # First try to find a playlist
+
+    with YoutubeDL(options) as ydl_flat:
         try:
-            # Search for playlists
-            search_results = ydl.extract_info(f"ytsearch5:{search_query}", download=False)
-            
-            # Filter for playlists with reasonable track counts
-            playlists = []
-            if search_results and 'entries' in search_results:
-                for entry in search_results['entries']:
-                    if entry.get('_type') == 'playlist' or 'playlist' in entry.get('title', '').lower():
-                        try:
-                            playlist_info = ydl.extract_info(f"https://www.youtube.com/playlist?list={entry.get('id')}", 
-                                                         download=False)
-                            if playlist_info and 'entries' in playlist_info and len(playlist_info['entries']) > 3:
-                                playlists.append(playlist_info)
-                        except:
-                            continue
-            
-            # If playlists found, return the one with the most tracks
-            if playlists:
-                best_playlist = max(playlists, key=lambda p: len(p['entries']))
-                return best_playlist
-                
-            # If no playlists found, try searching for a full album video
-            album_search = ydl.extract_info(f"ytsearch1:{query} full album", download=False)
-            if album_search and 'entries' in album_search and album_search['entries']:
-                # Return info about the first result
-                return album_search['entries'][0]
-                
+            # 1) Get flat search results
+            results = ydl_flat.extract_info(f"ytsearch8:{search_query}", download=False)
+            entries = results.get('entries', [])
+            if not entries:
+                print("No matching items found.")
+                return None
+
+            # 2) Show the entries to the user
+            print("\nFound the following options:")
+            for i, e in enumerate(entries, 1):
+                title = e.get('title') or e.get('id')
+                print(f"{i}. {title}")
+
+            # 3) Prompt for selection
+            while True:
+                try:
+                    choice = int(input(f"Select a result (1–{len(entries)}): "))
+                    if not 1 <= choice <= len(entries):
+                        raise ValueError("Out of range")
+                    selected = entries[choice - 1]
+                    break
+                except Exception as err:
+                    print(f"Invalid selection. Try again. ({err})")
+
+            # 4) Build the real URL
+            eid = selected.get('id')
+            if selected.get('_type') == 'playlist' or 'playlist' in (selected.get('title','').lower()):
+                real_url = f"https://www.youtube.com/playlist?list={eid}"
+            else:
+                real_url = f"https://www.youtube.com/watch?v={eid}"
+
         except Exception as e:
             print(f"Search error: {e}")
-            
+            return None
+
+    # 5) Fetch full info (with chapters or entries)
+    with YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
+        try:
+            info = ydl.extract_info(real_url, download=False)
+            # If it's a playlist with entries, return that
+            if 'entries' in info and len(info['entries']) > 1:
+                print(f"✅ Loaded playlist: {info.get('title')} ({len(info['entries'])} tracks)")
+                return info
+            # If it's a video with chapters, return that
+            if 'chapters' in info and len(info['chapters']) > 1:
+                print(f"✅ Loaded chaptered video: {info.get('title')}")
+                return info
+
+            print("❌ Selected item has neither multiple entries nor chapters.")
+        except Exception as e:
+            print(f"Error loading selected item: {e}")
+
     return None
 
 def split_album_video(video_info, output_folder):

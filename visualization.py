@@ -168,71 +168,74 @@ def stack_images_with_margin(image_files, margin=10, border=30, bg_color=None, a
     # Add album title if provided
     if album_title and title_height > 0:
         try:
-            # First try to get Forte path from matplotlib
-            forte_path = get_font_path_from_matplotlib('Forte')
+            from PIL import ImageFont, ImageDraw
             
-            # Calculate font size based on available space and title length
-            # Shorter titles can be larger, longer titles smaller
-            font_size_factor = min(1.0, max(0.5, 40 / max(10, len(album_title))))
-            font_size = int(title_height * 0.7 * font_size_factor)
-            
-            # Make sure font is not too small or too large
-            font_size = max(30, min(font_size, 90))
-            
-            print(f"Using font size: {font_size}px for title")
-            
-            if forte_path:
-                font = ImageFont.truetype(forte_path, font_size)
-                print(f"Using Forte font at: {forte_path}")
-            else:
-                # Fall back to other options
-                try:
-                    font = ImageFont.truetype("Arial Bold", font_size)
-                    print("Using Arial Bold font")
-                except:
-                    print("Using default font")
-                    font = ImageFont.load_default()
-                    
-            draw = ImageDraw.Draw(combined)
-            
-            # Calculate text position (centered)
-            title_position = (width + 2*border) // 2
-            
-            # Simplified title - remove parts in brackets for cleaner display
+            # Simplify display title
             if " [" in album_title:
                 display_title = album_title.split(" [")[0]
             elif " {" in album_title:
                 display_title = album_title.split(" {")[0]
             else:
                 display_title = album_title
-                
-            # For very long titles, truncate or add an ellipsis
-            max_display_length = 60
-            if len(display_title) > max_display_length:
-                display_title = display_title[:max_display_length-3] + "..."
-            
-            # Get opposite color for outline
+
+            draw = ImageDraw.Draw(combined)
+
+            # Font loading
+            forte_path = get_font_path_from_matplotlib('Forte')
+            fallback_font = "arialbd.ttf"  # You can adjust this if you want another fallback
+            font_path = forte_path or fallback_font
+
+            max_font_size = int(title_height * 0.7)
+            min_font_size = 20
+
+            # Try to fit title in one line
+            for font_size in range(max_font_size, min_font_size - 1, -2):
+                font = ImageFont.truetype(font_path, font_size)
+                bbox = draw.textbbox((0, 0), display_title, font=font)
+                text_width = bbox[2] - bbox[0]
+                if text_width <= width:
+                    break
+            else:
+                # If no font size fits, break into two lines
+                words = display_title.split()
+                midpoint = len(words) // 2
+                line1 = ' '.join(words[:midpoint])
+                line2 = ' '.join(words[midpoint:])
+                line1_font = ImageFont.truetype(font_path, max(min_font_size, int(title_height * 0.35)))
+                line2_font = ImageFont.truetype(font_path, max(min_font_size, int(title_height * 0.35)))
+
+                text_color = get_text_color(bg_color)
+                outline_color = (0, 0, 0) if text_color == (255, 255, 255) else (255, 255, 255)
+                anchor_x = (width + 2 * border) // 2
+                y1 = int(title_height * 0.3)
+                y2 = int(title_height * 0.7)
+
+                for dx, dy in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+                    draw.text((anchor_x + dx, y1 + dy), line1, font=line1_font, fill=outline_color, anchor="mm")
+                    draw.text((anchor_x + dx, y2 + dy), line2, font=line2_font, fill=outline_color, anchor="mm")
+
+                draw.text((anchor_x, y1), line1, font=line1_font, fill=text_color, anchor="mm")
+                draw.text((anchor_x, y2), line2, font=line2_font, fill=text_color, anchor="mm")
+                print(f"Added title in two lines: '{line1}' / '{line2}'")
+                return combined  # Skip single-line drawing below
+
+            # If it fit in one line
+            font = ImageFont.truetype(font_path, font_size)
+            text_color = get_text_color(bg_color)
             outline_color = (0, 0, 0) if text_color == (255, 255, 255) else (255, 255, 255)
-            
-            # Scale outline size based on font size
             outline_size = max(2, int(font_size * 0.05))
-            
-            # Draw text outline/shadow for better visibility
-            for offset in [(outline_size, outline_size), 
-                          (-outline_size, -outline_size), 
-                          (outline_size, -outline_size), 
-                          (-outline_size, outline_size)]:
-                draw.text((title_position + offset[0], title_height//2), 
-                        display_title, fill=outline_color, font=font, anchor="mm")  # Center vertically too
-            
-            # Draw the main text
-            draw.text((title_position, title_height//2), display_title, 
-                    fill=text_color, font=font, anchor="mm")  # Centered in title area
-            
-            print(f"Added title: {display_title} with font size {font_size}")
-            
+            x = (width + 2 * border) // 2
+            y = title_height // 2
+
+            for dx, dy in [(-outline_size, -outline_size), (outline_size, -outline_size),
+                        (-outline_size, outline_size), (outline_size, outline_size)]:
+                draw.text((x + dx, y + dy), display_title, fill=outline_color, font=font, anchor="mm")
+            draw.text((x, y), display_title, fill=text_color, font=font, anchor="mm")
+            print(f"Added title: '{display_title}' with font size {font_size}")
+
         except Exception as e:
             print(f"Title rendering error: {e}")
+
     
     # Paste images with margins
     y_offset = border + title_height
