@@ -16,42 +16,27 @@ def create_gradient_image(colors, height=100):
     return img
 
 def get_dominant_color(images):
-    """Extract dominant color from the visualization images with debugging"""
-    # Flatten all gradients into one list of colors
-    all_colors = []
+    """Compute a perceptually balanced dominant color from the list of images (e.g., album covers)"""
+    all_pixels = []
+
     for img in images:
-        # Convert to PIL Image if numpy array
         if isinstance(img, np.ndarray):
             pil_img = Image.fromarray(img)
         else:
             pil_img = img
-            
-        # Sample colors more evenly from across the image
+
         pil_img = pil_img.resize((50, 50))
         pixels = list(pil_img.getdata())
-        
-        # Take a smaller sample for efficiency
-        sample = pixels[::10]  # Take every 10th pixel
-        
-        for color in sample:
-            if isinstance(color, int):  # Skip grayscale
-                continue
-            if len(color) >= 3:  # RGB or RGBA
-                all_colors.append(color[:3])  # Just take RGB values
-    
-    # Count colors and find most common
-    color_counter = Counter(all_colors)
-    
-    # Print top 5 colors for debugging
-    print("\nTop 5 most common colors:")
-    for color, count in color_counter.most_common(5):
-        print(f"RGB{color}: {count} occurrences")
-    
-    # Simply use the most common color
-    if color_counter:
-        return color_counter.most_common(1)[0][0]
-    
-    return (0, 0, 0)  # Default fallback
+
+        filtered = [p[:3] for p in pixels if isinstance(p, tuple) and 20 < sum(p[:3]) < 740]
+        all_pixels.extend(filtered)
+
+    if not all_pixels:
+        return (0, 0, 0)
+
+    avg = tuple(int(np.mean([p[i] for p in all_pixels])) for i in range(3))
+    print(f"\nCalculated average RGB color from album art: {avg}")
+    return avg
 
 def create_track_visualization(gradient_image, title, output_path):
     """Create visualization for a single track"""

@@ -4,6 +4,10 @@ import audio_processing
 import visualization
 import youtube_utils
 from config import sanitize_filename
+from visualization import get_dominant_color
+from PIL import Image
+import requests
+from io import BytesIO
 
 def main():
     # Get user input for album/song
@@ -27,8 +31,31 @@ def main():
     os.makedirs(output_folder, exist_ok=True)
     print(f"Saving to folder: {output_folder}")
 
-    # Ask user if they want to set a specific background color
-    bg_color = get_user_bg_color_choice()
+    # Fetch thumbnail and compute background color
+    bg_color = None
+    video_id = result.get('id') or (result['entries'][0].get('id') if 'entries' in result else None)
+    if video_id:
+        thumb_urls = [
+            f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
+            f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+        ]
+
+        for url in thumb_urls:
+            try:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    cover_image = Image.open(BytesIO(response.content))
+                    bg_color = get_dominant_color([cover_image])
+                    break
+            except Exception as e:
+                print(f"Thumbnail fetch failed for {url}: {e}")
+        else:
+            print("No usable thumbnail found, using fallback background color.")
+
+    # Ask user if they want to override the background color
+    user_bg = get_user_bg_color_choice()
+    if user_bg is not None:
+        bg_color = user_bg
 
     # Extract tracks based on whether it's a playlist or a single album video
     try:
