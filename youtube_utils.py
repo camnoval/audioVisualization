@@ -50,7 +50,10 @@ def download_youtube_audio_and_metadata(url, output_filename='audio.wav'):
     return output_filename, title, artist
 
 def search_youtube_playlist(query, selection_index=None, return_entries_only=False):
-    search_query = f"{query} full album"
+    if query.startswith("http") and ("list=" in query or "playlist" in query):
+        return load_youtube_url(query)
+
+    search_query = f"{query}"
     options = {
         'quiet': True,
         'extract_flat': True,
@@ -74,18 +77,10 @@ def search_youtube_playlist(query, selection_index=None, return_entries_only=Fal
                 if env_index is not None and env_index.isdigit():
                     selection_index = int(env_index)
 
-            if selection_index is not None:
-                selected = entries[selection_index]
-            else:
-                print("\nFound the following options:")
-                for i, e in enumerate(entries, 1):
-                    title = e.get('title') or e.get('id')
-                    print(f"{i}. {title}")
-                choice = int(input(f"Select a result (1–{len(entries)}): "))
-                selected = entries[choice - 1]
+            selected = entries[selection_index] if selection_index is not None else entries[0]
 
             eid = selected.get('id')
-            if selected.get('_type') == 'playlist' or 'playlist' in (selected.get('title','').lower()):
+            if selected.get('_type') == 'playlist' or 'playlist' in (selected.get('title', '').lower()) or 'list=' in query:
                 real_url = f"https://www.youtube.com/playlist?list={eid}"
             else:
                 real_url = f"https://www.youtube.com/watch?v={eid}"
@@ -94,31 +89,23 @@ def search_youtube_playlist(query, selection_index=None, return_entries_only=Fal
             print(f"Search error: {e}")
             return None
 
-    with YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
-        try:
-            info = ydl.extract_info(real_url, download=False)
-            if 'entries' in info and len(info['entries']) > 1:
-                print(f"✅ Loaded playlist: {info.get('title')} ({len(info['entries'])} tracks)")
-                return info
-            if 'chapters' in info and len(info['chapters']) > 1:
-                print(f"✅ Loaded chaptered video: {info.get('title')}")
-                return info
-            print("❌ Selected item has neither multiple entries nor chapters.")
-        except Exception as e:
-            print(f"Error loading selected item: {e}")
-
-    return None
+    return load_youtube_url(real_url)
 
 def load_youtube_url(link):
     try:
         with YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
             info = ydl.extract_info(link, download=False)
+
             if 'entries' in info and len(info['entries']) > 1:
                 print(f"✅ Loaded playlist: {info.get('title')} ({len(info['entries'])} tracks)")
+                info['id'] = info.get('id') or info['entries'][0].get('id')
                 return info
+
             elif 'chapters' in info and len(info['chapters']) > 1:
                 print(f"✅ Loaded chaptered video: {info.get('title')}")
+                info['id'] = info.get('id') or info.get('webpage_url', '').split('=')[-1]
                 return info
+
             print("❌ Link must be a playlist or a video with chapters.")
             return None
     except Exception as e:
