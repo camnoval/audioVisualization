@@ -26,7 +26,7 @@ def main():
         result = youtube_utils.search_youtube_playlist(user_input, selection_index=selection_index)
 
     if not result:
-        print("[ERROR] No results found. Please try a different search.")
+        print("[ERROR] No results found. Please try a different search (Likely copyright error, can usually get around this by using a URL instead).")
         sys.exit(1)
 
     album_title = result.get('title', user_input)
@@ -133,6 +133,25 @@ def main():
         print(f"[ERROR] Failed to create combined image: {e}")
 
     print("[INFO] Done!")
+    # Cleanup: remove intermediate files, keep only the combined image
+    try:
+        for f in os.listdir(output_folder):
+            if not f.endswith("_combined.png"):
+                file_path = os.path.join(output_folder, f)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)
+        print("[CLEANUP] Removed intermediate track files.")
+    except Exception as e:
+        print(f"[CLEANUP WARNING] Could not delete some files: {e}")
+    # Remove temp audio files just in case
+    for f in os.listdir(os.getcwd()):
+        if f.startswith("temp_audio."):
+            try:
+                os.remove(f)
+            except:
+                pass
+
+
 
 if __name__ == "__main__":
     main()

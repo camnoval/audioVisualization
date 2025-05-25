@@ -14,6 +14,62 @@ import time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from audioVisualization.main import main as run_main
+from config import sanitize_filename
+import visualization
+
+class ColorPreviewWindow(tk.Toplevel):
+    def __init__(self, master, combined_path, album_title):
+        super().__init__(master)
+        self.title("🎨 Real-Time Color Preview")
+        self.geometry("600x400")
+        self.combined_path = combined_path
+        self.album_title = album_title
+        self.output_folder = os.path.dirname(combined_path)
+
+        self.r = tk.IntVar(value=128)
+        self.g = tk.IntVar(value=0)
+        self.b = tk.IntVar(value=128)
+
+        for i, (label, var) in enumerate(zip(("R", "G", "B"), (self.r, self.g, self.b))):
+            tk.Label(self, text=label).grid(row=0, column=i)
+            tk.Scale(self, from_=0, to=255, orient=tk.HORIZONTAL, variable=var,
+                     command=lambda e: self.update_preview()).grid(row=1, column=i, padx=5, pady=5)
+
+        self.preview_label = tk.Label(self)
+        self.preview_label.grid(row=2, column=0, columnspan=3, pady=10)
+
+        tk.Button(self, text="✅ Apply", command=self.apply_color).grid(row=3, column=0, pady=10)
+        tk.Button(self, text="❌ Cancel", command=self.destroy).grid(row=3, column=2, pady=10)
+
+        self.update_preview()
+
+    def update_preview(self):
+        rgb = (self.r.get(), self.g.get(), self.b.get())
+        try:
+            image_files = sorted([
+                os.path.join(self.output_folder, f)
+                for f in os.listdir(self.output_folder)
+                if f.endswith(".png") and "_combined" not in f
+            ])
+            preview_path = visualization.create_combined_image(
+                image_files=image_files,
+                output_folder=self.output_folder,
+                album_title=self.album_title,
+                bg_color=rgb
+            )
+            preview_img = Image.open(preview_path)
+            preview_img.thumbnail((400, 300))
+            img_tk = ImageTk.PhotoImage(preview_img)
+            self.preview_label.configure(image=img_tk)
+            self.preview_label.image = img_tk
+            self.preview_file = preview_path
+        except Exception as e:
+            print(f"[ERROR] Preview update failed: {e}")
+
+    def apply_color(self):
+        self.master.output_image_path = self.preview_file
+        self.master.load_preview()
+        self.destroy()
 
 class VisualizerGUI:
     def __init__(self, root):
@@ -39,12 +95,9 @@ class VisualizerGUI:
         right_frame = tk.Frame(main_frame, bg="#1e1e1e")
         right_frame.pack(side="right", fill="y")
 
-        title = tk.Label(left_frame, text="🎧 Audio Visualizer", font=("Helvetica", 20, "bold"), fg="white", bg="#1e1e1e")
-        title.pack(pady=(5, 0))
-
-        instruction = tk.Label(left_frame, text="Paste a YouTube playlist link, full album video, or search a title",
-                               font=("Helvetica", 11), fg="lightgray", bg="#1e1e1e")
-        instruction.pack(pady=(0, 10))
+        tk.Label(left_frame, text="🎧 Audio Visualizer", font=("Helvetica", 20, "bold"), fg="white", bg="#1e1e1e").pack(pady=(5, 0))
+        tk.Label(left_frame, text="Paste a YouTube playlist link, full album video, or search a title",
+                 font=("Helvetica", 11), fg="lightgray", bg="#1e1e1e").pack(pady=(0, 10))
 
         self.query_var = tk.StringVar()
         query_frame = tk.Frame(left_frame, bg="#1e1e1e")
@@ -55,14 +108,13 @@ class VisualizerGUI:
         self.result_listbox = tk.Listbox(left_frame, font=("Helvetica", 12), width=60, height=5, bg="#2e2e2e", fg="white")
         self.result_listbox.pack(pady=5)
 
-
         self.use_auto_color = tk.BooleanVar(value=True)
         color_frame = tk.Frame(left_frame, bg="#1e1e1e")
         tk.Checkbutton(color_frame, text="Use album cover color", variable=self.use_auto_color, bg="#1e1e1e", fg="white",
                        activebackground="#1e1e1e", selectcolor="#1e1e1e", font=("Helvetica", 12)).pack(side="left")
         tk.Button(color_frame, text="Pick Custom Color", command=self.pick_color, font=("Helvetica", 12)).pack(side="left", padx=10)
         color_frame.pack(pady=5)
-        
+
         tk.Button(left_frame, text="Select and Visualize", command=self.start_visualization, font=("Helvetica", 12)).pack(pady=5)
 
         self.status_text = tk.Text(left_frame, height=8, bg="#2e2e2e", fg="white", font=("Courier", 10))
@@ -78,11 +130,48 @@ class VisualizerGUI:
         self.save_button.pack(pady=5)
 
     def pick_color(self):
-        color = colorchooser.askcolor(title="Choose background color")
-        if color[0]:
-            self.custom_color = tuple(map(int, color[0]))
-            self.use_auto_color.set(False)
-            self.log(f"Custom color selected: {self.custom_color}")
+        if not self.output_image_path or not os.path.exists(self.output_image_path):
+            self.log("⚠️ No combined image to preview.")
+            return
+
+        # Open the OS-native color picker
+        color = colorchooser.askcolor(title="Pick a background color")
+        if not color or not color[0]:
+            return  # User canceled
+
+        rgb = tuple(map(int, color[0]))
+        self.custom_color = rgb
+
+        album_title = os.path.basename(self.output_image_path).replace("_combined.png", "")
+        self.log(f"🎨 Updating background color to RGB{rgb}")
+
+        try:
+            from config import sanitize_filename
+            import visualization
+
+            folder = os.path.dirname(self.output_image_path)
+
+            # Grab all track-level PNGs
+            image_paths = sorted([
+                os.path.join(folder, f)
+                for f in os.listdir(folder)
+                if f.endswith(".png") and "_combined" not in f
+            ])
+
+            # Rebuild the combined image with the new background
+            new_combined_path = visualization.create_combined_image(
+                image_paths=image_paths,
+                output_folder=folder,
+                album_title=album_title,
+                bg_color=rgb
+            )
+
+            self.output_image_path = new_combined_path
+            self.load_preview()
+            self.log("✅ Background updated successfully.")
+        except Exception as e:
+            self.log(f"❌ Failed to update background: {e}")
+
 
     def log(self, message):
         self.status_text.insert(tk.END, message + "\n")
@@ -184,13 +273,11 @@ class VisualizerGUI:
             self.log(f"❌ Error: {e}")
 
     def load_preview(self):
-        import time
-
+        time.sleep(0.5)
         if not self.output_image_path:
             self.log("⚠️ No output image path set.")
             return
 
-        # Retry a few times in case file isn't fully written yet
         for _ in range(5):
             if os.path.exists(self.output_image_path):
                 break
@@ -204,7 +291,7 @@ class VisualizerGUI:
                 self.image_label.configure(image=img_tk)
                 self.image_label.image = img_tk
                 self.save_button.config(state="normal")
-                self.log("🖼️ Image preview loaded.")
+                self.log("✅ Image preview loaded.")
             except Exception as e:
                 self.log(f"⚠️ Error loading image preview: {e}")
         else:
