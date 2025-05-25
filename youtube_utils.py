@@ -3,16 +3,6 @@ import re
 import subprocess
 from yt_dlp import YoutubeDL
 
-try:
-    from moviepy import AudioFileClip
-except ImportError:
-    try:
-        from moviepy.editor import AudioFileClip  # type: ignore
-        print("Using moviepy.editor AudioFileClip import")
-    except ImportError:
-        print("Warning: Could not import AudioFileClip from moviepy. Using FFmpeg fallback.")
-        AudioFileClip = None
-
 def download_youtube_audio_and_metadata(url, output_filename='audio.wav'):
     options = {
         'format': 'bestaudio/best',
@@ -25,22 +15,16 @@ def download_youtube_audio_and_metadata(url, output_filename='audio.wav'):
     artist = info.get('uploader', 'Unknown Artist')
     temp_filename = f"temp_audio.{info['ext']}"
 
-    if AudioFileClip is not None:
-        audio_clip = AudioFileClip(temp_filename)
-        audio_clip.write_audiofile(output_filename, codec='pcm_s16le')
-        audio_clip.close()
-    else:
-        try:
-            subprocess.run([
-                'ffmpeg', '-i', temp_filename,
-                '-acodec', 'pcm_s16le', '-y', output_filename
-            ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            print(f"Converted {temp_filename} to {output_filename} using FFmpeg")
-        except Exception as e:
-            print(f"Error converting audio with FFmpeg: {e}")
-            import shutil
-            shutil.copy(temp_filename, output_filename)
-            print(f"Copied original file instead")
+    try:
+        subprocess.run([
+            'ffmpeg', '-i', temp_filename, '-acodec', 'pcm_s16le', '-y', output_filename
+        ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print(f"Converted {temp_filename} to {output_filename} using FFmpeg")
+    except Exception as e:
+        print(f"Error converting audio with FFmpeg: {e}")
+        import shutil
+        shutil.copy(temp_filename, output_filename)
+        print(f"Copied original file instead")
 
     try:
         os.remove(temp_filename)

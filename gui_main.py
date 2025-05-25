@@ -3,11 +3,17 @@ from tkinter import filedialog, colorchooser, messagebox, ttk
 from threading import Thread
 import webbrowser
 import os
-from main import main as run_main
-import subprocess
 import platform
 import youtube_utils
 from PIL import Image, ImageTk
+import sys
+import io
+import time
+
+# Ensure parent directory is on sys.path so relative imports work
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from audioVisualization.main import main as run_main
 
 class VisualizerGUI:
     def __init__(self, root):
@@ -49,7 +55,6 @@ class VisualizerGUI:
         self.result_listbox = tk.Listbox(left_frame, font=("Helvetica", 12), width=60, height=5, bg="#2e2e2e", fg="white")
         self.result_listbox.pack(pady=5)
 
-        tk.Button(left_frame, text="Select and Visualize", command=self.start_visualization, font=("Helvetica", 12)).pack(pady=5)
 
         self.use_auto_color = tk.BooleanVar(value=True)
         color_frame = tk.Frame(left_frame, bg="#1e1e1e")
@@ -57,6 +62,8 @@ class VisualizerGUI:
                        activebackground="#1e1e1e", selectcolor="#1e1e1e", font=("Helvetica", 12)).pack(side="left")
         tk.Button(color_frame, text="Pick Custom Color", command=self.pick_color, font=("Helvetica", 12)).pack(side="left", padx=10)
         color_frame.pack(pady=5)
+        
+        tk.Button(left_frame, text="Select and Visualize", command=self.start_visualization, font=("Helvetica", 12)).pack(pady=5)
 
         self.status_text = tk.Text(left_frame, height=8, bg="#2e2e2e", fg="white", font=("Courier", 10))
         self.status_text.pack(pady=5, padx=10, fill="both", expand=True)
@@ -146,35 +153,62 @@ class VisualizerGUI:
 
         self.progress['value'] = 0
         self.save_button.config(state="disabled")
+        self.status_text.delete(1.0, tk.END)
         self.log("⏳ Starting visualization...")
         Thread(target=self.run_pipeline).start()
 
     def run_pipeline(self):
         try:
-            print("[GUI] Running pipeline thread...")
-            for key in ["AUDIOVISUALIZER_DIRECT_URL", "AUDIOVISUALIZER_INPUT", "AUDIOVISUALIZER_SELECTION_INDEX", "AUDIOVISUALIZER_COLOR"]:
-                print(f"[ENV] {key} = {os.environ.get(key)}")
-            run_main()
+            import contextlib
+            class StreamInterceptor(io.StringIO):
+                def write(this, txt):
+                    if txt.strip():
+                        self.log(txt.strip())
+                        if txt.startswith("[PROGRESS]"):
+                            try:
+                                percent = int(txt.split()[1].replace("%", ""))
+                                self.progress['value'] = percent
+                            except:
+                                pass
+                        elif txt.startswith("[OUTPUT]"):
+                            self.output_image_path = txt.replace("[OUTPUT]", "").strip()
+                    super().write(txt)
+
+            stream = StreamInterceptor()
+            with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
+                run_main()
+
             self.log("✅ Done generating image.")
             self.load_preview()
         except Exception as e:
             self.log(f"❌ Error: {e}")
 
     def load_preview(self):
-        from config import sanitize_filename
-        album_title = os.environ.get("AUDIOVISUALIZER_INPUT") or os.environ.get("AUDIOVISUALIZER_DIRECT_URL", "output")
-        filename = f"{sanitize_filename(album_title)}_combined.png"
-        path = os.path.join(os.getcwd(), filename) if os.path.exists(filename) else os.path.join(os.getcwd(), sanitize_filename(album_title), filename)
-        if os.path.exists(path):
-            self.output_image_path = path
-            img = Image.open(path)
-            img.thumbnail((200, 200))
-            img_tk = ImageTk.PhotoImage(img)
-            self.image_label.configure(image=img_tk)
-            self.image_label.image = img_tk
-            self.save_button.config(state="normal")
+        import time
+
+        if not self.output_image_path:
+            self.log("⚠️ No output image path set.")
+            return
+
+        # Retry a few times in case file isn't fully written yet
+        for _ in range(5):
+            if os.path.exists(self.output_image_path):
+                break
+            time.sleep(0.5)
+
+        if os.path.exists(self.output_image_path):
+            try:
+                img = Image.open(self.output_image_path)
+                img.thumbnail((200, 200))
+                img_tk = ImageTk.PhotoImage(img)
+                self.image_label.configure(image=img_tk)
+                self.image_label.image = img_tk
+                self.save_button.config(state="normal")
+                self.log("🖼️ Image preview loaded.")
+            except Exception as e:
+                self.log(f"⚠️ Error loading image preview: {e}")
         else:
-            self.log("⚠️ Image file not found.")
+            self.log(f"⚠️ Image file not found: {self.output_image_path}")
 
     def save_image(self):
         if self.output_image_path:

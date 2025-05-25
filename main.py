@@ -64,8 +64,6 @@ def main():
         except Exception as e:
             print(f"[WARN] Invalid custom color input: {env_color}")
 
-    print(f"[DEBUG] Result keys: {list(result.keys())}")
-
     if 'entries' in result:
         print(f"[INFO] Found playlist: {result.get('title')} with {len(result['entries'])} tracks")
         tracks = youtube_utils.extract_tracks_from_playlist(result)
@@ -88,6 +86,8 @@ def main():
     all_image_paths = []
 
     for idx, track in enumerate(tracks, start=1):
+        percent = int((idx - 1) / len(tracks) * 100)
+        print(f"[PROGRESS] {percent}% complete")
         print(f"[INFO] Processing track {idx}/{len(tracks)}: {track['title']}")
         try:
             if 'url' in track:
@@ -105,7 +105,7 @@ def main():
             colors = audio_processing.process_audio(audio_file, segment_duration=0.05)
             print(f"[DEBUG] Generated {len(colors)} colors")
 
-            base_gradient = visualization.create_gradient_image(colors, height=200)
+            base_gradient = visualization.create_gradient_image(colors, height=200, target_width=1000)
             output_filename = f"{idx:02d}_{sanitize_filename(song_title)}.png"
             full_output_path = os.path.join(output_folder, output_filename)
 
@@ -119,18 +119,18 @@ def main():
         except Exception as e:
             print(f"[ERROR] Error processing track {idx}: {e}")
 
-    if all_image_paths:
-        print("[INFO] Creating combined image...")
-        try:
-            combined_path = visualization.create_combined_image(
-                all_image_paths,
-                output_folder,
-                album_title,
-                bg_color
-            )
-            print(f"[INFO] Combined image saved to: {combined_path}")
-        except Exception as e:
-            print(f"[ERROR] Failed to create combined image: {e}")
+    print("[INFO] Creating combined image...")
+    try:
+        combined_path = visualization.create_combined_image(
+            all_image_paths,
+            output_folder,
+            album_title,
+            bg_color
+        )
+        print(f"[INFO] Combined image saved to: {combined_path}")
+        print(f"[OUTPUT] {combined_path}", flush=True) 
+    except Exception as e:
+        print(f"[ERROR] Failed to create combined image: {e}")
 
     print("[INFO] Done!")
 

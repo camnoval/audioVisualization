@@ -7,13 +7,23 @@ from io import BytesIO
 import os
 from config import sanitize_filename, get_text_color, get_font_path_from_matplotlib
 
-def create_gradient_image(colors, height=100):
-    """Create a gradient image from a list of colors"""
+def create_gradient_image(colors, height=100, target_width=1000):
+    """Create a consistent-width gradient image from color list"""
     width = len(colors)
-    img = np.zeros((height, width, 3), dtype=np.uint8)
-    for i, color in enumerate(colors):
-        img[:, i, :] = color
+    if width == 0:
+        return np.zeros((height, target_width, 3), dtype=np.uint8)
+
+    img = np.zeros((height, target_width, 3), dtype=np.uint8)
+
+    for i in range(min(width, target_width)):
+        img[:, i, :] = colors[i]
+
+    # If there's a bunch of silence fill remaining with last valid color until it reaches target width (this is to handle a glitch)
+    if width < target_width:
+        img[:, width:, :] = colors[-1]
+
     return img
+
 
 def get_dominant_color(images):
     """Compute a perceptually balanced dominant color from the list of images (e.g., album covers)"""
