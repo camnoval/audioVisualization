@@ -136,7 +136,7 @@ def main():
     # Cleanup: remove intermediate files, keep only the combined image
     try:
         for f in os.listdir(output_folder):
-            if not f.endswith("_combined.png"):
+            if not f.endswith(".png"):
                 file_path = os.path.join(output_folder, f)
                 if os.path.isfile(file_path):
                     os.remove(file_path)
