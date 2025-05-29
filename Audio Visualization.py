@@ -95,54 +95,124 @@ class VisualizerGUI:
         right_frame = tk.Frame(main_frame, bg="#1e1e1e")
         right_frame.pack(side="right", fill="y")
 
-        tk.Label(left_frame, text="🎧 Audio Visualizer", font=("Helvetica", 20, "bold"), fg="white", bg="#1e1e1e").pack(pady=(5, 0))
-        tk.Label(left_frame, text="Paste a YouTube playlist link, full album video, or search a title",
-                 font=("Helvetica", 11), fg="lightgray", bg="#1e1e1e").pack(pady=(0, 10))
+        title = tk.Label(
+            left_frame,
+            text="🎧 Audio Visualizer",
+            font=("Helvetica", 20, "bold"),
+            fg="white",
+            bg="#1e1e1e"
+        )
+        title.pack(pady=(5, 0))
+
+        instruction = tk.Label(
+            left_frame,
+            text="Paste a YouTube playlist link, full album video, or search a title",
+            font=("Helvetica", 11),
+            fg="lightgray",
+            bg="#1e1e1e"
+        )
+        instruction.pack(pady=(0, 10))
 
         self.query_var = tk.StringVar()
         query_frame = tk.Frame(left_frame, bg="#1e1e1e")
-        tk.Entry(query_frame, textvariable=self.query_var, font=("Helvetica", 14), width=40).pack(side="left", padx=(0, 10))
-        tk.Button(query_frame, text="Search / Load", command=self.search_youtube, font=("Helvetica", 12)).pack(side="left")
+        tk.Entry(
+            query_frame,
+            textvariable=self.query_var,
+            font=("Helvetica", 14),
+            width=40
+        ).pack(side="left", padx=(0, 10))
+        tk.Button(
+            query_frame,
+            text="Search / Load",
+            command=self.search_youtube,
+            font=("Helvetica", 12)
+        ).pack(side="left")
         query_frame.pack(pady=5)
 
-        self.result_listbox = tk.Listbox(left_frame, font=("Helvetica", 12), width=60, height=5, bg="#2e2e2e", fg="white")
+        self.result_listbox = tk.Listbox(
+            left_frame,
+            font=("Helvetica", 12),
+            width=60,
+            height=5,
+            bg="#2e2e2e",
+            fg="white"
+        )
         self.result_listbox.pack(pady=5)
 
         self.use_auto_color = tk.BooleanVar(value=True)
         color_frame = tk.Frame(left_frame, bg="#1e1e1e")
-        tk.Checkbutton(color_frame, text="Use album cover color", variable=self.use_auto_color, bg="#1e1e1e", fg="white",
-                       activebackground="#1e1e1e", selectcolor="#1e1e1e", font=("Helvetica", 12)).pack(side="left")
-        tk.Button(color_frame, text="Pick Custom Color", command=self.pick_color, font=("Helvetica", 12)).pack(side="left", padx=10)
+        tk.Checkbutton(
+            color_frame,
+            text="Use album cover color",
+            variable=self.use_auto_color,
+            bg="#1e1e1e",
+            fg="white",
+            activebackground="#1e1e1e",
+            selectcolor="#1e1e1e",
+            font=("Helvetica", 12)
+        ).pack(side="left")
+        self.color_button = tk.Button(
+            color_frame,
+            text="Change Background Color",
+            command=self.pick_color,
+            font=("Helvetica", 12),
+            state="disabled"  # start disabled until image is generated
+        )
+        self.color_button.pack(side="left", padx=10)
         color_frame.pack(pady=5)
 
-        tk.Button(left_frame, text="Select and Visualize", command=self.start_visualization, font=("Helvetica", 12)).pack(pady=5)
+        tk.Button(
+            left_frame,
+            text="Select and Visualize",
+            command=self.start_visualization,
+            font=("Helvetica", 12)
+        ).pack(pady=5)
 
-        self.status_text = tk.Text(left_frame, height=8, bg="#2e2e2e", fg="white", font=("Courier", 10))
+        self.status_text = tk.Text(
+            left_frame,
+            height=8,
+            bg="#2e2e2e",
+            fg="white",
+            font=("Courier", 10)
+        )
         self.status_text.pack(pady=5, padx=10, fill="both", expand=True)
 
-        self.progress = ttk.Progressbar(right_frame, orient="vertical", length=200, mode="determinate")
+        self.progress = ttk.Progressbar(
+            right_frame,
+            orient="vertical",
+            length=200,
+            mode="determinate"
+        )
         self.progress.pack(pady=10)
 
         self.image_label = tk.Label(right_frame, bg="#1e1e1e")
         self.image_label.pack(pady=10)
 
-        self.save_button = tk.Button(right_frame, text="💾 Save As", command=self.save_image, font=("Helvetica", 12), state="disabled")
+        self.save_button = tk.Button(
+            right_frame,
+            text="💾 Save As",
+            command=self.save_image,
+            font=("Helvetica", 12),
+            state="disabled"
+        )
         self.save_button.pack(pady=5)
+
+    def log(self, message):
+        self.status_text.insert(tk.END, message + "\n")
+        self.status_text.see(tk.END)
 
     def pick_color(self):
         if not self.output_image_path or not os.path.exists(self.output_image_path):
-            self.log("⚠️ No combined image to preview.")
+            self.log("⚠️ No combined image to update.")
             return
 
-        # Open the OS-native color picker
         color = colorchooser.askcolor(title="Pick a background color")
         if not color or not color[0]:
-            return  # User canceled
+            return  # user canceled
 
         rgb = tuple(map(int, color[0]))
         self.custom_color = rgb
-
-        album_title = os.path.basename(self.output_image_path).replace("_combined.png", "")
+        self.use_auto_color.set(False)
         self.log(f"🎨 Updating background color to RGB{rgb}")
 
         try:
@@ -150,15 +220,14 @@ class VisualizerGUI:
             import visualization
 
             folder = os.path.dirname(self.output_image_path)
+            album_title = os.path.basename(self.output_image_path).replace("_combined.png", "")
 
-            # Grab all track-level PNGs
             image_paths = sorted([
                 os.path.join(folder, f)
                 for f in os.listdir(folder)
                 if f.endswith(".png") and "_combined" not in f
             ])
 
-            # Rebuild the combined image with the new background
             new_combined_path = visualization.create_combined_image(
                 image_paths=image_paths,
                 output_folder=folder,
@@ -172,10 +241,9 @@ class VisualizerGUI:
         except Exception as e:
             self.log(f"❌ Failed to update background: {e}")
 
-
-    def log(self, message):
-        self.status_text.insert(tk.END, message + "\n")
-        self.status_text.see(tk.END)
+        def log(self, message):
+            self.status_text.insert(tk.END, message + "\n")
+            self.status_text.see(tk.END)
 
     def search_youtube(self):
         query = self.query_var.get().strip()
@@ -238,10 +306,13 @@ class VisualizerGUI:
             os.environ["AUDIOVISUALIZER_INPUT"] = query
             os.environ["AUDIOVISUALIZER_SELECTION_INDEX"] = str(self.selected_index)
 
-        os.environ["AUDIOVISUALIZER_COLOR"] = "auto" if self.use_auto_color.get() else ",".join(map(str, self.custom_color))
+        os.environ["AUDIOVISUALIZER_COLOR"] = (
+            "auto" if self.use_auto_color.get() else ",".join(map(str, self.custom_color))
+        )
 
         self.progress['value'] = 0
         self.save_button.config(state="disabled")
+        self.color_button.config(state="disabled")  # disable color change while generating
         self.status_text.delete(1.0, tk.END)
         self.log("⏳ Starting visualization...")
         Thread(target=self.run_pipeline).start()
@@ -249,6 +320,7 @@ class VisualizerGUI:
     def run_pipeline(self):
         try:
             import contextlib
+
             class StreamInterceptor(io.StringIO):
                 def write(this, txt):
                     if txt.strip():
@@ -268,6 +340,7 @@ class VisualizerGUI:
                 run_main()
 
             self.log("✅ Done generating image.")
+            self.color_button.config(state="normal")  # allow recoloring now
             self.load_preview()
         except Exception as e:
             self.log(f"❌ Error: {e}")

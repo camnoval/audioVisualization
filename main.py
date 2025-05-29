@@ -133,7 +133,7 @@ def main():
         print(f"[ERROR] Failed to create combined image: {e}")
 
     print("[INFO] Done!")
-    # Cleanup: remove intermediate files, keep only the combined image
+    # Cleanup: remove intermediate audio files, keep only the images (lets you change the background color later)
     try:
         for f in os.listdir(output_folder):
             if not f.endswith(".png"):
